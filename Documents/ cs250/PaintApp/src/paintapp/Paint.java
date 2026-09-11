@@ -92,7 +92,9 @@ public class Paint {
    public BorderPane getPane(){
        return pane;
    }
-       
+    
+
+//The methods that makes everything interactable   
    public void onOpen(){
        FileChooser fileChooser = new FileChooser();
        File file = fileChooser.showOpenDialog(null);
