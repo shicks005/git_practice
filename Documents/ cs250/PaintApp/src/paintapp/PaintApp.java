@@ -23,18 +23,16 @@ public class PaintApp extends Application {
         //pane = new BorderPane();
         
  
-        Scene scene = new Scene(paint.getPane(),600,630);
+        Scene scene = new Scene(paint.getPane(),700,630);
         
         stage.setTitle("Paint App");
         stage.setScene(scene);
         stage.show();
       
-
     }
 
     public static void main(String[] args) {
         launch(args);
         
     }
-    
 }
