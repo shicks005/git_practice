@@ -31,7 +31,7 @@ public class Paint {
    private MenuBar menuBar;
    private BorderPane pane;
     
-   
+   //creates the menu bar and canvas
    public Paint(){
        canvas = new Canvas(600,600);
        
