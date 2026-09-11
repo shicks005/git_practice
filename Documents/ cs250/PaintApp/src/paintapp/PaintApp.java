@@ -13,6 +13,7 @@ import javafx.scene.control.Button;
 import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
 import javafx.scene.text.Text;
+import javafx.scene.layout.BorderPane;
 /**
  *
  * @author shhic
@@ -20,28 +21,23 @@ import javafx.scene.text.Text;
 public class PaintApp extends Application {
     
     @Override
-    public void start(Stage stage)throws Exception {
-        stage.setScene(new Scene(FXMLLoader.load(getClass().getResource("paint.fxml"))));
-        stage.setTitle("PaintApp");
+    public void start(Stage stage){
+        Paint paint = new Paint();
+        //pane = new BorderPane();
+        
+ 
+        Scene scene = new Scene(paint.getPane(),600,630);
+        
+        stage.setTitle("Paint App");
+        stage.setScene(scene);
         stage.show();
       
 
     }
 
-   /* private void initUI(Stage stage){
-        Text text = new Text();
-        text.setText("POKEMON");
-        StackPane root = new StackPane();
-        Scene scene = new Scene(root, 400, 300);
-        root.getChildren().add(text);
-        stage.setScene(scene);
-        stage.setTitle("Catch em all"); 
-        stage.show();
-    } 
-   */
     public static void main(String[] args) {
-        //launch(args);
-        System.out.print("Hello");
+        launch(args);
+        
     }
     
 }
