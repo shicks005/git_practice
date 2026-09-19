@@ -97,6 +97,7 @@ public class Paint {
        toolBar.getItems().add(brushSize);
        toolBar.getItems().add(colorPicker);
        toolBar.getItems().add(resizeButton);
+       
        pane = new BorderPane();
        
        HBox top = new HBox();
