@@ -11,6 +11,9 @@ import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
 import javafx.scene.text.Text;
 import javafx.scene.layout.BorderPane;
+import javafx.event.EventHandler;
+import javafx.stage.WindowEvent;
+
 /**
  *
  * @author shhic
@@ -18,17 +21,27 @@ import javafx.scene.layout.BorderPane;
 public class PaintApp extends Application {
     
     @Override
-    public void start(Stage stage){
+    public void start(Stage stage) {
         Paint paint = new Paint();
         //pane = new BorderPane();
         
- 
         Scene scene = new Scene(paint.getPane(),700,630);
+        
         
         stage.setTitle("Paint App");
         stage.setScene(scene);
-        stage.show();
-      
+        
+      stage.setOnCloseRequest(new EventHandler<WindowEvent>(){
+         
+          @Override
+          public void handle(WindowEvent event){
+              boolean closeWindow = paint.confirmClose(stage);
+              if(!closeWindow){
+                  event.consume();
+              }
+          }
+      });
+      stage.show();
     }
 
     public static void main(String[] args) {
