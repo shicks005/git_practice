@@ -36,8 +36,15 @@ import javafx.scene.input.MouseEvent;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
-
-
+import javafx.scene.control.TextInputDialog;
+import java.util.Optional;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
+import java.util.Optional;
+import java.util.Stack;
+import javafx.scene.layout.Pane;
+import javafx.scene.shape.Rectangle;
+import javafx.scene.image.ImageView;
 /**
  *
  * @author shhic
@@ -62,12 +69,30 @@ public class Paint {
    private ColorPicker fillColorPicker;
    private boolean colorGrabberSelected = false;
    private TabPane tabPane;
-   
    private String selectedShape = "";
    private String lineStyle = "solid";
-   
    private double lastX;
    private double lastY;
+   private int polygonSides = 5;
+   private Stack<WritableImage> undoStack;
+   private Stack<WritableImage> redoStack;
+   private TextTool textTool;
+   private boolean textToolSelected = false;
+   private SelectionTool selectionTool;
+   private boolean selectionToolSelected = false;
+   private double selectionStartX;
+   private double selectionStartY;
+   private double selectionEndX;
+   private double selectionEndY;
+   private Rectangle selectionRectangle;
+   private ImageView pastedImageView;
+   private boolean movingPastedImage = false;
+   private double pasteOffsetX;
+   private double pasteOffsetY;
+   private Pane canvasPane;
+  
+   
+   
     
    //creates the menu bar and canvas
    public Paint(){
@@ -76,9 +101,22 @@ public class Paint {
        linetool = new LineTool(canvas);
        curvedLineTool = new CurvedLineTool(canvas);
        shapeTool = new ShapeTool(canvas);
+       textTool = new TextTool(canvas);
+       selectionTool = new SelectionTool(canvas);
+       selectionRectangle = new Rectangle();
+       
+       selectionRectangle.setFill(Color.TRANSPARENT);
+       selectionRectangle.setStroke(Color.BLACK);
+       selectionRectangle.setStrokeWidth(1);
+       selectionRectangle.getStrokeDashArray().addAll(5.0, 5.0);
+       selectionRectangle.setVisible(false);
+       
+       undoStack = new Stack<WritableImage>();
+       redoStack = new Stack<WritableImage>();
        
        menuBar = new MenuBar();
        Menu file = new Menu("File");
+       Menu edit = new Menu("Edit");
        Menu help = new Menu("Help");
        
        
@@ -87,22 +125,36 @@ public class Paint {
        MenuItem open = new MenuItem("Open");
        MenuItem exit = new MenuItem("Exit");
        MenuItem newTab = new MenuItem("New");
+       MenuItem clearCanvas = new MenuItem("Clear Canvas");
+       MenuItem undo = new MenuItem("Undo");
+       MenuItem redo = new MenuItem("Redo");
        
        //sprint 2
        MenuItem helpItem = new MenuItem("Help");
        MenuItem about = new MenuItem("About");
+       MenuItem paste = new MenuItem("Paste");
        
        open.setAccelerator(KeyCombination.keyCombination("Ctrl+O"));
        save.setAccelerator(KeyCombination.keyCombination("Ctrl+S"));
        saveAs.setAccelerator(KeyCombination.keyCombination("Ctrl+Shift+S"));
        exit.setAccelerator(KeyCombination.keyCombination("Ctrl+Q"));
        newTab.setAccelerator(KeyCombination.keyCombination("Ctrl+T"));
+       undo.setAccelerator(KeyCombination.keyCombination("Ctrl+Z"));
+       redo.setAccelerator(KeyCombination.keyCombination("Ctrl+Y"));
+       paste.setAccelerator(KeyCombination.keyCombination("Ctrl+V"));
+       
 
        file.getItems().add(newTab);
+       file.getItems().add(clearCanvas);
        file.getItems().add(open);
        file.getItems().add(save);
        file.getItems().add(saveAs);
        file.getItems().add(exit);
+       
+       edit.getItems().add(undo);
+       edit.getItems().add(redo);
+       edit.getItems().add(paste);
+       
        
        //Sprint 2//
        help.getItems().add(helpItem);
@@ -110,6 +162,7 @@ public class Paint {
        /////////////
       
        menuBar.getMenus().add(file);
+       menuBar.getMenus().add(edit);
        menuBar.getMenus().add(help);
        //pane = new BorderPane();
        //pane.setTop(menuBar);
@@ -128,8 +181,13 @@ public class Paint {
        ToolBar toolBar = new ToolBar();
        Button resizeButton = new Button("Resize Canvas");
        
+       Button textButton = new Button("Text Box");
+       Button selectButton = new Button("Select");
+       
+       
        
        toolBar.getItems().add(sizeLabel);
+       toolBar.getItems().add(selectButton);
        toolBar.getItems().add(brushSize);
        toolBar.getItems().add(colorPicker);
        toolBar.getItems().add(fillColorPicker);
@@ -139,6 +197,11 @@ public class Paint {
        
      
        pane = new BorderPane();
+       canvasPane = new Pane();
+       //Pane canvasPane = new Pane();
+       canvasPane.getChildren().add(canvas);
+       canvasPane.getChildren().add(selectionRectangle);
+       
        
        
        
@@ -149,9 +212,12 @@ public class Paint {
        tabPane = new TabPane();
 
        Tab firstTab = new Tab("Tab 1");
-       ScrollPane scrollPane = new ScrollPane(canvas);
+       ScrollPane scrollPane = new ScrollPane(canvasPane);
        scrollPane.setPannable(true);
 
+       
+       
+       
        firstTab.setContent(scrollPane);
        firstTab.setClosable(false);
        firstTab.setUserData(canvas);
@@ -177,7 +243,9 @@ public class Paint {
        
        
        //////////////////////////////////////////////////////////////////////////////////////
-         
+        
+       
+       
        //User actions
        open.setOnAction(new EventHandler<ActionEvent>() {
            @Override
@@ -189,7 +257,7 @@ public class Paint {
            @Override
            public void handle(ActionEvent e){
            onSave();
-       }   
+       } 
    });
        saveAs.setOnAction(new EventHandler<ActionEvent>() {
            @Override
@@ -229,6 +297,8 @@ public class Paint {
                 curvedLineSelected = false;
                 selectedShape = "";
                 colorGrabberSelected = false;
+                textToolSelected = false;
+                selectionToolSelected = false;
        }
     });
          
@@ -238,6 +308,7 @@ public class Paint {
             @Override
             public void handle(ActionEvent event){
                 colorGrabberSelected = true;
+                textToolSelected = false;
             }
         });
         
@@ -255,6 +326,7 @@ public class Paint {
                 curvedLineSelected = false;
                 selectedShape = "";
                 colorGrabberSelected = false;
+                textToolSelected = false;
        }
     });
         MenuItem curvedLineItem = new MenuItem("Curved Line");
@@ -265,6 +337,7 @@ public class Paint {
                 curvedLineSelected = true;
                 selectedShape = "";
                 colorGrabberSelected = false;
+                textToolSelected = false;
        }
     });
         
@@ -282,14 +355,24 @@ public class Paint {
         MenuItem circleItem = new MenuItem("Circle");
         MenuItem ellipseItem = new MenuItem("Ellipse");
         MenuItem triangleItem = new MenuItem("Triangle");
+        MenuItem pentagonItem = new MenuItem("Pentagon");
+        MenuItem polygonItem = new MenuItem("Polygon");
+        MenuItem rightTriangle = new MenuItem("Right Triangle");
+        MenuItem isoscelesTriangle = new MenuItem("Isosceles Triangle");
         
         shapesButton.getItems().add(squareItem);
         shapesButton.getItems().add(rectangleItem);
         shapesButton.getItems().add(circleItem);
         shapesButton.getItems().add(ellipseItem);
         shapesButton.getItems().add(triangleItem);
+        shapesButton.getItems().add(pentagonItem);
+        shapesButton.getItems().add(polygonItem);
+        shapesButton.getItems().add(rightTriangle);
+        shapesButton.getItems().add(isoscelesTriangle);
         
         toolBar.getItems().add(shapesButton);
+        
+        toolBar.getItems().add(textButton);
         
         squareItem.setOnAction(new EventHandler<ActionEvent>(){
             @Override
@@ -298,6 +381,7 @@ public class Paint {
                 lineToolSelected = false;
                 curvedLineSelected = false;
                 colorGrabberSelected = false;
+                textToolSelected = false;
             }
         });
         
@@ -308,6 +392,7 @@ public class Paint {
                 lineToolSelected = false;
                 curvedLineSelected = false;
                 colorGrabberSelected = false;
+                textToolSelected = false;
             }
         });
         
@@ -318,6 +403,7 @@ public class Paint {
                 lineToolSelected = false;
                 curvedLineSelected = false;
                 colorGrabberSelected = false;
+                textToolSelected = false;
             }
         });
         
@@ -328,6 +414,7 @@ public class Paint {
                 lineToolSelected = false;
                 curvedLineSelected = false;
                 colorGrabberSelected = false;
+                textToolSelected = false;
             }
         });
         
@@ -338,7 +425,83 @@ public class Paint {
                 lineToolSelected = false;
                 curvedLineSelected = false;
                 colorGrabberSelected = false;
+                textToolSelected = false;
             }
+        });
+        
+        rightTriangle.setOnAction(new EventHandler<ActionEvent>(){
+            @Override
+            public void handle(ActionEvent event){
+                selectedShape = "rightTriangle";
+                lineToolSelected = false;
+                curvedLineSelected = false;
+                colorGrabberSelected = false;
+                textToolSelected = false;
+            }
+        });
+        
+        isoscelesTriangle.setOnAction(new EventHandler<ActionEvent>(){
+            @Override
+            public void handle(ActionEvent event){
+                selectedShape = "isoscelesTriangle";
+                lineToolSelected = false;
+                curvedLineSelected = false;
+                colorGrabberSelected = false;
+                textToolSelected = false;
+            }
+        });
+        
+        pentagonItem.setOnAction(new EventHandler<ActionEvent>(){
+            @Override
+            public void handle(ActionEvent event){
+                selectedShape = "pentagon";
+                lineToolSelected = false;
+                curvedLineSelected = false;
+                colorGrabberSelected = false;
+                textToolSelected = false;
+            }
+        });
+        
+        undo.setOnAction(new EventHandler<ActionEvent>(){
+           @Override
+           public void handle(ActionEvent event){
+               undo();
+           }
+        });
+        
+        redo.setOnAction(new EventHandler<ActionEvent>(){
+           @Override
+           public void handle(ActionEvent event){
+               redo();
+           }
+        });
+        
+        polygonItem.setOnAction(new EventHandler<ActionEvent>(){
+            @Override
+            public void handle(ActionEvent event){
+                TextInputDialog dialog = new TextInputDialog();
+                dialog.setTitle("Polygon");
+                dialog.setHeaderText("Choose the number of sides");
+                dialog.setContentText("Number of sides:");
+                Optional<String> result = dialog.showAndWait();
+                
+                if (result.isPresent()){
+                    try{
+                        int sides = Integer.parseInt(result.get());
+                        if (sides >= 3){
+                            polygonSides = sides;
+                            selectedShape = "polygon";
+                            lineToolSelected = false;
+                            curvedLineSelected = false;
+                            colorGrabberSelected = false;
+                            textToolSelected = false;
+                        }
+                    } catch (NumberFormatException e){
+                        System.out.println("Please enter a number.");
+                    }
+                }
+                
+            }  
         });
         
         
@@ -390,6 +553,91 @@ public class Paint {
             }
         });
         
+        clearCanvas.setOnAction(new EventHandler<ActionEvent>(){
+            @Override
+            public void handle(ActionEvent event){
+                Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+                alert.setTitle("Clear Canvas");
+                alert.setHeaderText("Clear the canvas?");
+                alert.setContentText("Are you sure you want to clear the canvas?");
+                Optional<ButtonType> result = alert.showAndWait();
+                
+                if (result.isPresent() && result.get() == ButtonType.OK){
+                    GraphicsContext gc = canvas.getGraphicsContext2D();
+                    gc.clearRect(0,0, canvas.getWidth(), canvas.getHeight());
+                    smartSave.changesMade();
+                }
+            }
+        });
+        
+        textButton.setOnAction(new EventHandler<ActionEvent>(){
+            @Override
+            public void handle(ActionEvent event){
+                textToolSelected = true;
+                lineToolSelected = false;
+                curvedLineSelected = false;
+                selectedShape = "";
+                colorGrabberSelected = false;
+            }
+        });
+        
+        selectButton.setOnAction(new EventHandler<ActionEvent>(){
+            @Override
+            public void handle(ActionEvent event){
+                selectionToolSelected = true;
+                
+                lineToolSelected = false;
+                curvedLineSelected = false;
+                selectedShape = "";
+                colorGrabberSelected = false;
+                textToolSelected = false;
+            }
+        });
+        
+        paste.setOnAction(new EventHandler<ActionEvent>(){
+            @Override
+            public void handle(ActionEvent event){
+                
+                WritableImage copiedImage = selectionTool.getCopiedImage();
+                if (copiedImage != null){
+                    pastedImageView = new ImageView(copiedImage);
+                    pastedImageView.setX(50);
+                    pastedImageView.setY(50);
+                    canvasPane.getChildren().add(pastedImageView);
+                    movingPastedImage = true;
+                    
+                    pastedImageView.setOnMousePressed(e -> {
+
+                    pasteOffsetX = e.getX();
+                    pasteOffsetY = e.getY();
+                });
+                    
+                    pastedImageView.setOnMouseDragged(e -> {
+                        
+                    double newX = pastedImageView.getX()+ e.getX() - pasteOffsetX;
+
+                    double newY = pastedImageView.getY() + e.getY() - pasteOffsetY;
+
+                    pastedImageView.setX(newX);
+                    pastedImageView.setY(newY);
+                });
+                    
+                    pastedImageView.setOnMouseClicked(e -> {
+
+                if (e.getClickCount() == 2) {
+                        saveCanvasState();
+                        GraphicsContext gc = canvas.getGraphicsContext2D();
+                        gc.drawImage( pastedImageView.getImage(),pastedImageView.getX(), pastedImageView.getY());
+                        canvasPane.getChildren().remove(pastedImageView);
+                        pastedImageView = null;
+                        movingPastedImage = false;
+                        smartSave.changesMade();
+                    }
+                });
+               }
+            }
+        });
+        
         
         resizeButton.setOnAction(new EventHandler<ActionEvent>() {
             
@@ -416,12 +664,44 @@ public class Paint {
    
    //////////////////////////////////////////////////////////////////////////////////////////////////////
    
+   
+   
  /**
  * Sets up the mouse events for the current canvas.
  */
    private void setupCanvasEvents(){
        canvas.setOnMousePressed(event -> {
-            if (colorGrabberSelected){
+           
+           if (!colorGrabberSelected){
+               saveCanvasState();
+           }
+           
+           if(selectionToolSelected){
+               selectionStartX = event.getX();
+               selectionStartY = event.getY();
+               selectionRectangle.setX(selectionStartX);
+               selectionRectangle.setY(selectionStartY);
+               selectionRectangle.setWidth(0);
+               selectionRectangle.setHeight(0);
+               
+               selectionRectangle.setVisible(true);
+           }
+           
+           if (textToolSelected){
+               TextInputDialog dialog = new TextInputDialog();
+               dialog.setTitle("Add Text");
+               dialog.setHeaderText("Enter your text");
+               dialog.setContentText("Text:");
+               Optional<String> result = dialog.showAndWait();
+               
+               if (result.isPresent()){
+                   textTool.drawText(result.get(), event.getX(), event.getY(), colorPicker.getValue());
+                   smartSave.changesMade();
+               }
+               textToolSelected = false;
+           }
+           
+           if (colorGrabberSelected){
                 WritableImage image = new WritableImage((int) canvas.getWidth(),(int) canvas.getHeight());
                  canvas.snapshot(null, image);
                  PixelReader pixelReader = image.getPixelReader();
@@ -434,9 +714,12 @@ public class Paint {
             lastX = event.getX();
             lastY = event.getY();
         });
+       
+       
+       
 
         canvas.setOnMouseDragged(event -> {
-            if (!lineToolSelected && !curvedLineSelected && selectedShape.isEmpty()){
+            if (!lineToolSelected && !curvedLineSelected && selectedShape.isEmpty() && !selectionToolSelected&& !textToolSelected&& !colorGrabberSelected){
                 GraphicsContext gc = canvas.getGraphicsContext2D();
                 
                 try{
@@ -474,8 +757,27 @@ public class Paint {
                     System.out.println( "Please enter a valid brush size.");
                 }
             }
+            
+            if (selectionToolSelected){
+                double x = Math.min(selectionStartX, event.getX());
+                double y = Math.min(selectionStartY, event.getY());
+                
+                double width = Math.abs(event.getX() - selectionStartX);
+                double height = Math.abs(event.getY() - selectionStartY);
+                
+                selectionRectangle.setX(x);
+                selectionRectangle.setY(y);
+                
+                selectionRectangle.setWidth(width);
+                selectionRectangle.setHeight(height);
+                selectionRectangle.setVisible(true);
+                
+            }
 
         });
+        
+        
+        
         
         canvas.setOnMouseReleased(e -> {
 
@@ -539,9 +841,100 @@ public class Paint {
                     System.out.println("Invalid brush size.");
                 }
             }
+            
+            if(selectedShape.equals("pentagon")){
+                try{
+                    double size = Double.parseDouble(brushSize.getText());
+                    shapeTool.drawPentagon(lastX, lastY, e.getX(), e.getY(), size, colorPicker.getValue(), fillColorPicker.getValue(), lineStyle);
+                    smartSave.changesMade();
+                } catch (NumberFormatException ex){
+                    System.out.println("Invalid brush size.");
+                }
+            }
+            
+            if(selectedShape.equals("polygon")){
+                double size = Double.parseDouble(brushSize.getText());
+                shapeTool.drawPolygon(lastX,lastY,e.getX(),e.getY(),polygonSides,size,colorPicker.getValue(),fillColorPicker.getValue(),lineStyle);
+                smartSave.changesMade();
+            }
+        
+        
+        if(selectedShape.equals("rightTriangle")){
+                try{
+                    double size = Double.parseDouble(brushSize.getText());
+                    shapeTool.drawRightTriangle(lastX, lastY, e.getX(), e.getY(), size, colorPicker.getValue(), fillColorPicker.getValue(), lineStyle);
+                    smartSave.changesMade();
+                } catch (NumberFormatException ex){
+                    System.out.println("Invalid brush size.");
+                }
+            }
+        
+        if(selectedShape.equals("isoscelesTriangle")){
+                try{
+                    double size = Double.parseDouble(brushSize.getText());
+                    shapeTool.drawIsoscelesTriangle(lastX, lastY, e.getX(), e.getY(), size, colorPicker.getValue(), fillColorPicker.getValue(), lineStyle);
+                    smartSave.changesMade();
+                } catch (NumberFormatException ex){
+                    System.out.println("Invalid brush size.");
+                }
+            }
+        
+        if(selectionToolSelected){
+            selectionEndX = e.getX();
+            selectionEndY = e.getY();
+            
+            selectionTool.copy(selectionStartX,selectionStartY,selectionEndX,selectionEndY);
+            selectionRectangle.setVisible(false);
+            selectionToolSelected = false;
+            
+        }
+        
         });
    }
-   //////////////////////////////////////////////////////////////////////////////////////////////
+   
+   
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+   
+   
+   
+   private void saveCanvasState() {
+       WritableImage image = new WritableImage((int) canvas.getWidth(),(int) canvas.getHeight());
+       canvas.snapshot(null, image);
+       undoStack.push(image);
+       redoStack.clear();
+   }
+   
+   private void undo(){
+       if (!undoStack.empty()){
+           WritableImage currentImage = new WritableImage((int) canvas.getWidth(),(int) canvas.getHeight());
+           canvas.snapshot(null, currentImage);
+           redoStack.push(currentImage);
+           WritableImage previousImage = undoStack.pop();
+           GraphicsContext gc = canvas.getGraphicsContext2D();
+           
+           gc.clearRect(0,0,canvas.getWidth(),(int) canvas.getHeight());
+           gc.drawImage(previousImage, 0, 0);
+       }
+   }
+   
+   private void redo(){
+       if (!redoStack.empty()){
+           WritableImage currentImage = new WritableImage((int) canvas.getWidth(),(int) canvas.getHeight());
+           canvas.snapshot(null, currentImage);
+           undoStack.push(currentImage);
+           WritableImage nextImage = redoStack.pop();
+           GraphicsContext gc = canvas.getGraphicsContext2D();
+           
+           gc.clearRect(0,0,canvas.getWidth(),(int) canvas.getHeight());
+           gc.drawImage(nextImage, 0, 0);
+       }
+   }
+   
+   
+  
+   
+   /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+   
    
    
    public Canvas getCanvas(){
@@ -556,7 +949,9 @@ public class Paint {
        return pane;
    }
     
-   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+   
+   
+   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
    
    
 //The methods that makes everything interactable 
