@@ -105,7 +105,8 @@ public class Paint {
    private PaintWebServer webServer = new PaintWebServer();
   
    
-   
+   //Need to try and fix my curved line//
+   //Need to find a better way to make text more simple to use
     
    //creates the menu bar and canvas
    public Paint(){
@@ -914,6 +915,8 @@ public class Paint {
                     System.out.println( "Please enter a valid brush size.");
                 }
             }
+            
+            //need to fix the way my pasted part of the image moves when I try to move it//
             
             if (selectionToolSelected){
                 double x = Math.min(selectionStartX, event.getX());

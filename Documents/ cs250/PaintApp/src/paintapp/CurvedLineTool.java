@@ -20,6 +20,9 @@ public class CurvedLineTool {
         this.canvas = canvas;
     }
     
+    
+    //Need to come back and fix drawCurve//
+    
     public void drawCurve(double x1, double y1, double x2, double y2, double size, Color color){
         GraphicsContext gc = canvas.getGraphicsContext2D();
         

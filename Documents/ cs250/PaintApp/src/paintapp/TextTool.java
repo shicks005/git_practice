@@ -18,6 +18,7 @@ public class TextTool {
         this.canvas = canvas;
     }
     
+    
     public void drawText(String text, double x, double y, Color color){
         GraphicsContext gc = canvas.getGraphicsContext2D();
         gc.setFill(color);
