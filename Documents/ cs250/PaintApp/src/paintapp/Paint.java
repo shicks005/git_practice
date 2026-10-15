@@ -37,14 +37,21 @@ import javafx.scene.input.KeyCombination;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextInputDialog;
-import java.util.Optional;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
 import java.util.Optional;
 import java.util.Stack;
+import javafx.geometry.Pos;
 import javafx.scene.layout.Pane;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.image.ImageView;
+import javafx.scene.layout.Priority;
+import javafx.scene.control.Dialog;
+import javafx.scene.control.ButtonBar;
+import java.util.ArrayList;
+import java.io.ByteArrayOutputStream;
+import javafx.scene.control.CheckBox;
+
 /**
  *
  * @author shhic
@@ -90,6 +97,12 @@ public class Paint {
    private double pasteOffsetX;
    private double pasteOffsetY;
    private Pane canvasPane;
+   private Label autoSaveLabel;
+   private int starPoints = 5;
+   private Canvas previewCanvas;
+   private GraphicsContext preview;
+   private ShapeTool previewShape;
+   private PaintWebServer webServer = new PaintWebServer();
   
    
    
@@ -104,7 +117,10 @@ public class Paint {
        textTool = new TextTool(canvas);
        selectionTool = new SelectionTool(canvas);
        selectionRectangle = new Rectangle();
+       autoSaveLabel = new Label("Next AutoSave: 05:00");
        
+       
+       autoSaveLabel.setVisible(true);
        selectionRectangle.setFill(Color.TRANSPARENT);
        selectionRectangle.setStroke(Color.BLACK);
        selectionRectangle.setStrokeWidth(1);
@@ -118,6 +134,8 @@ public class Paint {
        Menu file = new Menu("File");
        Menu edit = new Menu("Edit");
        Menu help = new Menu("Help");
+       Menu view = new Menu("View");
+       Menu webMenu = new Menu("Web Server");
        
        
        MenuItem save = new MenuItem("Save");
@@ -128,6 +146,9 @@ public class Paint {
        MenuItem clearCanvas = new MenuItem("Clear Canvas");
        MenuItem undo = new MenuItem("Undo");
        MenuItem redo = new MenuItem("Redo");
+       MenuItem toggleTimer = new MenuItem("Show/Hide Timer");
+       MenuItem shareImages = new MenuItem("Share Images");
+       MenuItem stopServer = new MenuItem("Stop Server");
        
        //sprint 2
        MenuItem helpItem = new MenuItem("Help");
@@ -198,8 +219,14 @@ public class Paint {
      
        pane = new BorderPane();
        canvasPane = new Pane();
-       //Pane canvasPane = new Pane();
+      
+       previewCanvas = new Canvas(canvas.getWidth(), canvas.getHeight());
+       preview = previewCanvas.getGraphicsContext2D();
+       previewShape = new ShapeTool(previewCanvas);
+       previewCanvas.setMouseTransparent(true);
+       
        canvasPane.getChildren().add(canvas);
+       canvasPane.getChildren().add(previewCanvas);
        canvasPane.getChildren().add(selectionRectangle);
        
        
@@ -236,9 +263,19 @@ public class Paint {
         }
     );
        
-       VBox top2 = new VBox(menuBar, toolBar);
+        
+       HBox menuRow = new HBox();
+       menuRow.getChildren().add(menuBar);
+       HBox.setHgrow(menuBar, Priority.ALWAYS);
+       autoSaveLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: gray;");
+       autoSaveLabel.setMinWidth(55);
+       autoSaveLabel.setAlignment(Pos.CENTER);
+       menuRow.getChildren().add(autoSaveLabel);
+        
+       VBox top2 = new VBox(menuRow, toolBar);
        pane.setTop(top2);
        pane.setCenter(tabPane);
+       
        
        
        
@@ -314,7 +351,7 @@ public class Paint {
         
          
          
-         MenuButton pencilButton = new MenuButton("Pencil");
+        MenuButton pencilButton = new MenuButton("Pencil");
         
         MenuItem lineItem = new MenuItem("Line");
         
@@ -359,6 +396,7 @@ public class Paint {
         MenuItem polygonItem = new MenuItem("Polygon");
         MenuItem rightTriangle = new MenuItem("Right Triangle");
         MenuItem isoscelesTriangle = new MenuItem("Isosceles Triangle");
+        MenuItem starItem = new MenuItem("Star");
         
         shapesButton.getItems().add(squareItem);
         shapesButton.getItems().add(rectangleItem);
@@ -369,6 +407,7 @@ public class Paint {
         shapesButton.getItems().add(polygonItem);
         shapesButton.getItems().add(rightTriangle);
         shapesButton.getItems().add(isoscelesTriangle);
+        shapesButton.getItems().add(starItem);
         
         toolBar.getItems().add(shapesButton);
         
@@ -502,6 +541,36 @@ public class Paint {
                 }
                 
             }  
+        });
+        
+        starItem.setOnAction(new EventHandler<ActionEvent>(){
+            @Override
+            public void handle(ActionEvent event){
+               TextInputDialog dialog = new TextInputDialog("5"); 
+               dialog.setTitle("Star");
+               dialog.setHeaderText("Choose the number of points");
+               dialog.setContentText("Number of points:");
+               Optional<String> result = dialog.showAndWait();
+               
+               if (result.isPresent()){
+                    try{
+                        int points = Integer.parseInt(result.get());
+                        if (points >= 4){
+                            starPoints = points;
+                            selectedShape = "star";
+                            lineToolSelected = false;
+                            curvedLineSelected = false;
+                            colorGrabberSelected = false;
+                            textToolSelected = false;
+                            
+                        }else{
+                            System.out.println("Must have at least 4 points.");
+                        }
+                    } catch (NumberFormatException e){
+                        System.out.println("Please enter a valid number of sides.");
+                    }
+                }
+            }
         });
         
         
@@ -638,6 +707,36 @@ public class Paint {
             }
         });
         
+        toggleTimer.setOnAction(new EventHandler<ActionEvent>(){
+            @Override
+            public void handle(ActionEvent event){
+                autoSaveLabel.setVisible(!autoSaveLabel.isVisible());
+                autoSaveLabel.setManaged(autoSaveLabel.isVisible());
+            }
+        });
+        
+        view.getItems().add(toggleTimer);
+        menuBar.getMenus().add(view);
+        
+        
+        shareImages.setOnAction(new EventHandler<ActionEvent>(){
+            @Override
+            public void handle(ActionEvent event){
+                shareOnWeb();
+            }
+        });
+        
+        stopServer.setOnAction(new EventHandler<ActionEvent>(){
+            @Override
+            public void handle(ActionEvent event){
+                webServer.stop();
+                Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                alert.setTitle("Web Server");
+                alert.setHeaderText("Server Stopped");
+                alert.setContentText("The web server is now offline.");
+                alert.showAndWait();
+            }
+        });
         
         resizeButton.setOnAction(new EventHandler<ActionEvent>() {
             
@@ -651,6 +750,8 @@ public class Paint {
 
         canvas.setWidth(newWidth);
         canvas.setHeight(newHeight);
+        previewCanvas.setWidth(newWidth);
+        previewCanvas.setHeight(newHeight);
 
         GraphicsContext gc = canvas.getGraphicsContext2D();
 
@@ -658,9 +759,19 @@ public class Paint {
 
     }
 });
+   
+   webMenu.getItems().add(shareImages);
+   webMenu.getItems().add(stopServer);
+   
+   menuBar.getMenus().add(webMenu);
         
    setupCanvasEvents();
+   
+   System.out.println("autosave test");
+   new AutoSave(this);
    }
+   
+   
    
    //////////////////////////////////////////////////////////////////////////////////////////////////////
    
@@ -719,6 +830,60 @@ public class Paint {
        
 
         canvas.setOnMouseDragged(event -> {
+            clearPreview();
+            preview.setStroke(colorPicker.getValue());
+            try{
+                double size = Double.parseDouble(brushSize.getText());
+                preview.setLineWidth(size);
+                
+                if(lineStyle.equals("dashed")){
+                    preview.setLineDashes(10, 10);
+                }else{
+                    preview.setLineDashes(null);
+                }
+                preview.strokeLine(lastX,lastY,event.getX(), event.getY());
+            } catch(NumberFormatException ex){
+                System.out.println("Please enter a valid brush size.");
+            }
+            
+            if (!selectedShape.isEmpty()){
+                clearPreview();
+                try{
+                    double size = Double.parseDouble(brushSize.getText());
+                    double x1 = lastX;
+                    double y1 = lastY;
+                    double x2 = event.getX();
+                    double y2 = event.getY();
+                    Color border = colorPicker.getValue();
+                    Color fill = fillColorPicker.getValue();
+                    
+                    if (selectedShape.equals("square")){
+                        previewShape.drawSquare(x1,y1,x2,y2,size,border,fill,lineStyle);
+                    } else if (selectedShape.equals("rectangle")){
+                        previewShape.drawRectangle(x1,y1,x2,y2,size,border,fill,lineStyle);
+                    } else if (selectedShape.equals("circle")){
+                        previewShape.drawCircle(x1,y1,x2,y2,size,border,fill,lineStyle);
+                    } else if (selectedShape.equals("ellipse")){
+                        previewShape.drawEllipse(x1,y1,x2,y2,size,border,fill,lineStyle);
+                    } else if (selectedShape.equals("triangle")){
+                        previewShape.drawTriangle(x1,y1,x2,y2,size,border,fill,lineStyle);
+                    } else if (selectedShape.equals("rightTriangle")){
+                        previewShape.drawRightTriangle(x1,y1,x2,y2,size,border,fill,lineStyle);
+                    } else if (selectedShape.equals("isoscelesTriangle")){
+                        previewShape.drawIsoscelesTriangle(x1,y1,x2,y2,size,border,fill,lineStyle);
+                    } else if (selectedShape.equals("pentagon")){
+                        previewShape.drawPentagon(x1,y1,x2,y2,size,border,fill,lineStyle);
+                    } else if (selectedShape.equals("polygon")){
+                        previewShape.drawPolygon(x1,y1,x2,y2,polygonSides,size,border,fill,lineStyle);
+                    } else if (selectedShape.equals("star")){
+                        previewShape.drawStar(x1,y1,x2,y2,starPoints,size,border,fill,lineStyle);
+                    } 
+                    }catch (NumberFormatException ex){
+                    System.out.println("Please enter a valid brush size.");
+                
+               }
+            }
+            
             if (!lineToolSelected && !curvedLineSelected && selectedShape.isEmpty() && !selectionToolSelected&& !textToolSelected&& !colorGrabberSelected){
                 GraphicsContext gc = canvas.getGraphicsContext2D();
                 
@@ -739,16 +904,8 @@ public class Paint {
             if (curvedLineSelected) {
 
                 try {
-                    double size =
-                            Double.parseDouble(brushSize.getText());
-                    curvedLineTool.drawCurve(
-                            lastX,
-                            lastY,
-                            event.getX(),
-                            event.getY(),
-                            size,
-                            colorPicker.getValue()
-                    );
+                    double size = Double.parseDouble(brushSize.getText());
+                    curvedLineTool.drawCurve(lastX,lastY,event.getX(),event.getY(),size,colorPicker.getValue());
                     smartSave.changesMade();
                     lastX = event.getX();
                     lastY = event.getY();
@@ -780,11 +937,11 @@ public class Paint {
         
         
         canvas.setOnMouseReleased(e -> {
+            clearPreview();
 
             if (lineToolSelected) {
                 try {
-                    double size =
-                            Double.parseDouble(brushSize.getText());
+                    double size = Double.parseDouble(brushSize.getText());
                     linetool.drawLine(lastX,lastY,e.getX(),e.getY(),size,colorPicker.getValue(), lineStyle);
                     smartSave.changesMade();
                 } catch (NumberFormatException ex) {
@@ -879,6 +1036,16 @@ public class Paint {
                 }
             }
         
+        if(selectedShape.equals("star")){
+                try{
+                    double size = Double.parseDouble(brushSize.getText());
+                    shapeTool.drawStar(lastX, lastY, e.getX(), e.getY(),starPoints, size, colorPicker.getValue(), fillColorPicker.getValue(), lineStyle);
+                    smartSave.changesMade();
+                } catch (NumberFormatException ex){
+                    System.out.println("Invalid brush size.");
+                }
+            }
+        
         if(selectionToolSelected){
             selectionEndX = e.getX();
             selectionEndY = e.getY();
@@ -893,7 +1060,10 @@ public class Paint {
    }
    
    
+   
+   
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+   
    
    
    
@@ -930,8 +1100,79 @@ public class Paint {
        }
    }
    
-   
+   private void clearPreview(){
+       preview.clearRect(0,0, previewCanvas.getWidth(), previewCanvas.getHeight());
+   }
   
+   private void shareOnWeb(){
+       Dialog<ButtonType> dialog = new Dialog<ButtonType>();
+       dialog.setTitle("Share Images");
+       dialog.setHeaderText("Select the tabs to display on the web server");
+       
+       VBox layout = new VBox(10);
+       ArrayList<CheckBox> checkBoxes = new ArrayList<CheckBox>();
+       
+       for(int i = 0; i< tabPane.getTabs().size(); i++){
+           Tab tab = tabPane.getTabs().get(i);
+           
+           CheckBox checkBox = new CheckBox(tab.getText());
+           checkBoxes.add(checkBox);
+           layout.getChildren().add(checkBox);
+       }
+       
+       dialog.getDialogPane().setContent(layout);
+       dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+       Optional<ButtonType> result = dialog.showAndWait();
+       
+       if (!result.isPresent() || result.get() != ButtonType.OK){
+           return;
+       }
+       
+       ArrayList<byte[]> selectedImages = new ArrayList<byte[]>();
+       
+       for (int i = 0; i < checkBoxes.size(); i++) {
+           if (checkBoxes.get(i).isSelected()){
+               Tab tab = tabPane.getTabs().get(i);
+               Canvas selectedCanvas = (Canvas) tab.getUserData();
+               
+               try{
+                   WritableImage image = selectedCanvas.snapshot(null, null);
+                   ByteArrayOutputStream output = new ByteArrayOutputStream();
+                   
+                   ImageIO.write(SwingFXUtils.fromFXImage(image, null), "png", output);
+                   selectedImages.add(output.toByteArray());
+                   
+               } catch (Exception e){
+                   System.out.println("Failed to capture image: " + e);
+               }
+           }
+       }
+       
+       if (selectedImages.isEmpty()){
+           Alert alert = new Alert(Alert.AlertType.INFORMATION);
+           alert.setTitle("Web Server");
+           alert.setHeaderText("No Images Selected");
+           alert.setContentText("Please select at least one image tab.");
+           alert.showAndWait();
+           return;
+                   
+       }
+       try{
+           webServer.start(selectedImages);
+           Alert alert = new Alert(Alert.AlertType.INFORMATION);
+           alert.setTitle("Web Server Started");
+           alert.setHeaderText("Images are ready!");
+           alert.setContentText("Open http://localhost:8080 in your browser.");
+           alert.showAndWait();
+       } catch (Exception e){
+           Alert alert = new Alert(Alert.AlertType.ERROR);
+           alert.setTitle("Web Server Error");
+           alert.setHeaderText("Could not start the server");
+           alert.setContentText(e.getMessage());
+           alert.showAndWait();
+       }
+   }
+   
    
    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
    
@@ -984,7 +1225,7 @@ public class Paint {
    public void onSave(){
 
        
-       Image snapshot = canvas.snapshot(null,null);
+       Image snapshot = canvasPane.snapshot(null,null);
        try {
            ImageIO.write(SwingFXUtils.fromFXImage(snapshot, null), "png", new File("paint.png"));
            
@@ -1006,8 +1247,27 @@ public class Paint {
        
        File file = fileChooser.showSaveDialog(null);
        if(file != null){
+           String fileName = file.getName().toLowerCase();
+           String format = "png";
+           
+           if (fileName.endsWith(".jpg")){
+               format = "jpg";
+           } else if (fileName.endsWith(".bmp")){
+               format = "bmp";
+           }
+           
+           if (!format.equals("png")){
+               Alert warning = new Alert(Alert.AlertType.CONFIRMATION);
+               warning.setTitle("Image Format Warning");
+               warning.setHeaderText("Possible Image Data Loss");
+               warning.setContentText("Saving in a different image format may cause " + "some image features or data to be lost.\n\n" + "JPG may reduce image quality and does not " + "support transparency.\n\n" + "Do you wish to continue?");
+               Optional<ButtonType> result = warning.showAndWait();
+               if (!result.isPresent() || result.get() != ButtonType.OK){
+                   return;
+               }
+           }
            try{
-               Image snapshot = canvas.snapshot(null,null);
+               Image snapshot = canvasPane.snapshot(null,null);
                ImageIO.write(SwingFXUtils.fromFXImage(snapshot, null), "png", file);
                System.out.println("Image Saved");
            } catch(Exception e){
@@ -1021,59 +1281,84 @@ public class Paint {
    }
 
 
-public void showHelpWindow(){
-    Stage helpStage = new Stage();
-    helpStage.setTitle("Help");
+   public void showHelpWindow(){
+       Stage helpStage = new Stage();
+       helpStage.setTitle("Help");
     
-    Label helpwind = new Label("Paint Help\n\n" + "Click,hold, and drag to draw on the canvas.\n"
-    + "Use the text box to change the size of the brush\n" + "Choose a color using the color picker.\n" + "Click file to use open an image and or use save options");
+       Label helpwind = new Label("Paint Help\n\n" + "Click,hold, and drag to draw on the canvas.\n"
+       + "Use the text box to change the size of the brush\n" + "Choose a color using the color picker.\n" + "Click file to use open an image and or use save options");
     
-    Button closeButton = new Button("Close");
+       Button closeButton = new Button("Close");
     
-    closeButton.setOnAction(new EventHandler<ActionEvent>(){
-       @Override
-       public void handle(ActionEvent e){
-           helpStage.close();
-       }
-   });
+       closeButton.setOnAction(new EventHandler<ActionEvent>(){
+        @Override
+        public void handle(ActionEvent e){
+            helpStage.close();
+        }
+    });
     
-    VBox layout = new VBox(10);
-    layout.getChildren().add(helpwind);
-    layout.getChildren().add(closeButton);
+        VBox layout = new VBox(10);
+        layout.getChildren().add(helpwind);
+        layout.getChildren().add(closeButton);
     
-    Scene scene = new Scene(layout, 400, 250);
-    helpStage.setScene(scene);
-    helpStage.show();
+        Scene scene = new Scene(layout, 400, 250);
+        helpStage.setScene(scene);
+        helpStage.show();
     
-}
+    }
 
-public void showAboutWindow(){
-    Stage aboutStage = new Stage();
-    aboutStage.setTitle("About");
+    public void showAboutWindow(){
+       Stage aboutStage = new Stage();
+       aboutStage.setTitle("About");
     
-    Label about = new Label("Paint created by me");
+       Label about = new Label("Paint created by me");
     
-     Button closeButton = new Button("Close");
+       Button closeButton = new Button("Close");
     
-    closeButton.setOnAction(new EventHandler<ActionEvent>(){
-       @Override
-       public void handle(ActionEvent e){
+       closeButton.setOnAction(new EventHandler<ActionEvent>(){
+        @Override
+        public void handle(ActionEvent e){
            aboutStage.close();
+        }
+    });
+    
+       VBox layout = new VBox(10);
+       layout.getChildren().add(about);
+       layout.getChildren().add(closeButton);
+    
+       Scene scene = new Scene(layout, 400, 250);
+       aboutStage.setScene(scene);
+       aboutStage.show();
+    
+    }
+    public boolean confirmClose(Stage stage){
+       return smartSave.confirmClose(stage);
+    }
+
+  
+    public void autoSave(){
+       try{
+           boolean wasVisible = selectionRectangle.isVisible();
+           selectionRectangle.setVisible(false);
+           WritableImage image = new WritableImage((int)canvas.getWidth(), (int)canvas.getHeight());
+           canvasPane.snapshot(null, image);
+           selectionRectangle.setVisible(wasVisible);
+           File file = new File("autosave.png");
+           ImageIO.write(SwingFXUtils.fromFXImage(image, null), "png", file);
+           System.out.println("AutoSaved.");
+           System.out.println("Saved to " + file.getAbsolutePath());
+       } catch (Exception e){
+           System.out.println("AutoSave failed.");
        }
-   });
-    
-    VBox layout = new VBox(10);
-    layout.getChildren().add(about);
-    layout.getChildren().add(closeButton);
-    
-    Scene scene = new Scene(layout, 400, 250);
-    aboutStage.setScene(scene);
-    aboutStage.show();
-    
-}
-public boolean confirmClose(Stage stage){
-    return smartSave.confirmClose(stage);
-}
+    }
+   
+    public void autoSaveTimer(int seconds){
+       int minutes = seconds/60;
+       int sec = seconds % 60;
+       String time = String.format("%02d:%02d", minutes, sec);
+       autoSaveLabel.setText(time);
+    }
+
 }    
 
 

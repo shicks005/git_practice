@@ -19,7 +19,7 @@ public class ShapeTool {
     public ShapeTool(Canvas canvas) {
         this.canvas = canvas;
     }
-
+    
     public void drawRectangle(double x1, double y1, double x2, double y2,double size, Color borderColor, Color fillColor, String lineStyle) {
 
         GraphicsContext gc = canvas.getGraphicsContext2D();
@@ -252,6 +252,58 @@ public class ShapeTool {
         }   
         gc.fillPolygon(xPoints, yPoints, 3);
         gc.strokePolygon(xPoints, yPoints, 3);
+    }
+    
+    public void drawStar(double x1, double y1, double x2, double y2,int points, double size, Color borderColor, Color fillColor, String lineStyle){
+        GraphicsContext gc = canvas.getGraphicsContext2D();
+        
+        gc.save();
+        
+        double centerX = x1;
+        double centerY = y1;
+        
+        double radiusX = Math.abs(x2 - x1) / 2;
+        double radiusY = Math.abs(y2 - y1) / 2;
+        
+        double[] xPoints = new double[points * 2];
+        double[] yPoints = new double[points * 2];
+        
+        double radiusIn = 0.45;
+        
+        if(points == 4){
+            radiusIn = 0.7;
+        }else if (points == 6){
+            radiusIn = 0.35;
+        }
+        
+        for (int i = 0; i< points * 2; i++){
+            
+            double angle = Math.toRadians(-90 + i * 180/ points);
+            double radius;
+            if (i % 2 == 0){
+                radius = 1.0;
+            }else{
+                radius = radiusIn;
+            }
+            xPoints[i] = centerX + radiusX * radius * Math.cos(angle);
+            yPoints[i] = centerY + radiusY * radius * Math.sin(angle);
+        }
+        
+        gc.setLineWidth(size);
+        gc.setStroke(borderColor);
+        gc.setFill(fillColor);
+        
+        if (lineStyle.equals("dashed")) {
+            gc.setLineDashes(10, 10);
+        } else {
+            gc.setLineDashes(null);
+        }
+        
+        
+        gc.fillPolygon(xPoints, yPoints,points * 2);
+        gc.strokePolygon(xPoints, yPoints, points * 2);
+        
+        gc.restore();
     }
  
 }
